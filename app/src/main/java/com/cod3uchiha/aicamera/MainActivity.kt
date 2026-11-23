@@ -19,6 +19,18 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.HdrOn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import java.util.Locale
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
@@ -70,6 +82,8 @@ private fun CameraScreen() {
     var modelPath by remember { mutableStateOf<File?>(null) }
     var modelProgress by remember { mutableFloatStateOf(0f) }
     var downloadAttempt by remember { mutableIntStateOf(0) }
+    var gridEnabled by remember { mutableStateOf(false) }
+    var lastPhoto by remember { mutableStateOf<Uri?>(null) }
 
     LaunchedEffect(Unit) {
         if (!hasPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -93,139 +107,157 @@ private fun CameraScreen() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
-        background = Color(0xFF080A0E), surface = Color(0xFF121722),
-        primary = Color(0xFFB6F36B), onPrimary = Color(0xFF10150A),
+        background = Color(0xFF08090B), surface = Color(0xFF15181D),
+        primary = Color(0xFFC7F36B), onPrimary = Color(0xFF11150A),
         onBackground = Color.White, onSurface = Color.White
     )) {
-        Column(Modifier.fillMaxSize().background(Color(0xFF080A0E)).padding(16.dp)) {
-            Text("COD3UCHIHA", style = MaterialTheme.typography.labelLarge, color = Color(0xFFB6F36B))
-            Text("AI CAMERA", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-            Text("GALAXY S22 ULTRA EDITION", style = MaterialTheme.typography.labelSmall, color = Color.LightGray)
-            Spacer(Modifier.height(12.dp))
-            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                if (hasPermission) {
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { ctx ->
-                            val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-                            val future = ProcessCameraProvider.getInstance(ctx)
-                            future.addListener({
-                                val provider = future.get()
-                                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-                                val capture = ImageCapture.Builder()
-                                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                                    .setFlashMode(if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF)
-                                    .build()
-                                imageCapture = capture
-                                try {
-                                    provider.unbindAll()
-                                    activeCamera = provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
-                                    activeCamera?.cameraInfo?.zoomState?.observe(owner) { state ->
-                                        maxZoom = state.maxZoomRatio.coerceAtLeast(1f)
-                                        zoom = zoom.coerceIn(1f, maxZoom)
-                                    }
-                                } catch (error: Exception) {
-                                    status = "Camera could not start: ${error.message}"
+        Box(Modifier.fillMaxSize().background(Color(0xFF08090B))) {
+            if (hasPermission) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        val view = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
+                        val future = ProcessCameraProvider.getInstance(ctx)
+                        future.addListener({
+                            val provider = future.get()
+                            val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                            val capture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                                .setFlashMode(if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF).build()
+                            imageCapture = capture
+                            try {
+                                provider.unbindAll()
+                                activeCamera = provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture)
+                                activeCamera?.cameraInfo?.zoomState?.observe(owner) { state ->
+                                    maxZoom = state.maxZoomRatio.coerceAtLeast(1f)
+                                    zoom = zoom.coerceIn(1f, maxZoom)
                                 }
-                            }, ContextCompat.getMainExecutor(ctx))
-                            previewView
+                            } catch (e: Exception) { status = "Camera error: ${e.message}" }
+                        }, ContextCompat.getMainExecutor(ctx))
+                        view
+                    }
+                )
+                if (gridEnabled) {
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceEvenly) {
+                        repeat(2) { Spacer(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .35f))) }
+                    }
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        repeat(2) { Spacer(Modifier.fillMaxHeight().width(1.dp).background(Color.White.copy(alpha = .35f))) }
+                    }
+                }
+            } else {
+                Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }, Modifier.align(Alignment.Center)) { Text("Allow camera access") }
+            }
+
+            // Top controls
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 18.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("COD3UCHIHA", color = Color(0xFFC7F36B), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("CAMERA", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TopControl { gridEnabled = !gridEnabled; }
+                    TopControl {
+                        flashEnabled = !flashEnabled
+                        imageCapture?.flashMode = if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+                    }
+                    TopControl { status = "AI enhancement runs automatically after capture" }
+                }
+            }
+            Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 66.dp)
+                .clip(CircleShape).background(Color(0xB814171B)).padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(if (modelPath != null) Color(0xFFC7F36B) else Color(0xFFFFC857)))
+                Spacer(Modifier.width(7.dp))
+                Text(if (modelPath != null) "AI ENHANCE ON" else "SETTING UP AI • ${(modelProgress * 100).toInt()}%",
+                    color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, letterSpacing = .7.sp)
+            }
+
+            // Bottom camera controls
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE608090B), Color(0xFF08090B))))
+                .navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 58.dp, bottom = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    listOf(0.6f, 1f, 3f, 10f).filter { it <= maxZoom + .01f }.forEach { stop ->
+                        val selected = kotlin.math.abs(zoom - stop) < .12f
+                        Box(Modifier.padding(horizontal = 7.dp).size(if (selected) 42.dp else 36.dp)
+                            .clip(CircleShape).background(if (selected) Color(0xFFC7F36B) else Color(0xB814171B))
+                            .clickable {
+                                zoom = stop.coerceIn(1f, maxZoom)
+                                activeCamera?.cameraControl?.setZoomRatio(zoom)
+                            }, contentAlignment = Alignment.Center) {
+                            Text(if (stop < 1f) "0.6" else stop.toInt().toString(),
+                                color = if (selected) Color(0xFF08090B) else Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                    )
-                } else {
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
+                    }
                 }
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Zoom ${"%.1f".format(zoom)}×", color = Color.White)
-                IconButton(onClick = {
-                    flashEnabled = !flashEnabled
-                    imageCapture?.flashMode = if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
-                }) {
-                    Icon(if (flashEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff, contentDescription = "Toggle flash", tint = Color.White)
+                Slider(value = zoom.coerceIn(1f, maxZoom.coerceAtLeast(1.01f)), onValueChange = {
+                    zoom = it
+                    activeCamera?.cameraControl?.setZoomRatio(it.coerceIn(1f, maxZoom))
+                }, valueRange = 1f..maxZoom.coerceAtLeast(1.01f), modifier = Modifier.fillMaxWidth().height(28.dp),
+                    colors = SliderDefaults.colors(thumbColor = Color(0xFFC7F36B), activeTrackColor = Color(0xFFC7F36B)))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("PHOTO", color = Color(0xFFC7F36B), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                    Text("${String.format(Locale.US, "%.1f", zoom)}× / ${String.format(Locale.US, "%.0f", maxZoom)}×",
+                        color = Color.White.copy(alpha = .75f), fontSize = 11.sp)
                 }
-            }
-            Slider(
-                value = zoom.coerceIn(1f, maxZoom.coerceAtLeast(1f)),
-                onValueChange = { requested ->
-                    zoom = requested
-                    activeCamera?.cameraControl?.setZoomRatio(requested.coerceIn(1f, maxZoom))
-                },
-                valueRange = 1f..maxZoom.coerceAtLeast(1.01f)
-            )
-            Text("Camera-reported zoom: ${"%.1f".format(maxZoom)}×. The phone's camera HAL selects supported physical lenses.", style = MaterialTheme.typography.bodySmall, color = Color.LightGray)
-            Spacer(Modifier.height(8.dp))
-            if (modelPath == null) {
-                LinearProgressIndicator(progress = { modelProgress }, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(8.dp))
-            }
-            Button(
-                modifier = Modifier.fillMaxWidth().height(58.dp),
-                enabled = !busy && imageCapture != null && modelPath != null,
-                onClick = {
-                    val capture = imageCapture ?: return@Button
-                    val model = modelPath ?: return@Button
-                    busy = true
-                    status = "Capturing…"
-                    val file = File(context.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
-                    val options = ImageCapture.OutputFileOptions.Builder(file).build()
-                    capture.takePicture(options, executor, object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                            scope.launch {
-                                var original: android.graphics.Bitmap? = null
-                                var enhanced: android.graphics.Bitmap? = null
-                                try {
-                                    original = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.absolutePath) }
-                                        ?: error("Could not decode captured photo")
-                                    status = "Enhancing photo on device…"
-                                    enhanced = withContext(Dispatchers.Default) {
-                                        val engine = LiteSrEngine(model)
-                                        try { engine.enhance(original!!) } finally { engine.close() }
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xB814171B))
+                        .border(1.dp, Color.White.copy(alpha = .3f), RoundedCornerShape(12.dp))
+                        .clickable {
+                            lastPhoto?.let { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(it, "image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+                        }, contentAlignment = Alignment.Center) {
+                        Text("LAST", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Box(Modifier.size(78.dp).clip(CircleShape).background(Color.White).border(5.dp, Color.White.copy(alpha = .7f), CircleShape)
+                        .padding(5.dp).clip(CircleShape).background(Color.White)
+                        .clickable(enabled = !busy && imageCapture != null) {
+                            val capture = imageCapture ?: return@clickable
+                            val model = modelPath
+                            busy = true
+                            val file = File(context.cacheDir, "capture_${System.currentTimeMillis()}.jpg")
+                            capture.takePicture(ImageCapture.OutputFileOptions.Builder(file).build(), executor,
+                                object : ImageCapture.OnImageSavedCallback {
+                                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                        scope.launch {
+                                            var original: android.graphics.Bitmap? = null
+                                            var enhanced: android.graphics.Bitmap? = null
+                                            try {
+                                                original = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(file.absolutePath) }
+                                                    ?: error("Could not decode photo")
+                                                val result = if (model != null) {
+                                                    status = "Enhancing photo on device…"
+                                                    enhanced = withContext(Dispatchers.Default) {
+                                                        val engine = LiteSrEngine(model)
+                                                        try { engine.enhance(original!!) } finally { engine.close() }
+                                                    }
+                                                    enhanced!!
+                                                } else original!!
+                                                val saved = withContext(Dispatchers.IO) { saveToGallery(result) }
+                                                lastPhoto = saved
+                                                status = if (model != null) "AI-enhanced photo saved" else "Photo saved • AI model is downloading"
+                                            } catch (e: Exception) { status = "Processing failed: ${e.message}" }
+                                            finally { original?.recycle(); enhanced?.recycle(); busy = false; file.delete() }
+                                        }
                                     }
-                                    val saved = withContext(Dispatchers.IO) { saveToGallery(enhanced!!) }
-                                    status = if (saved != null) "AI-enhanced photo saved to Gallery" else "Could not save photo"
-                                } catch (error: Exception) {
-                                    status = "Capture/enhancement failed: ${error.message}"
-                                } finally {
-                                    original?.recycle()
-                                    enhanced?.recycle()
-                                    busy = false
-                                    file.delete()
-                                }
-                            }
-                        }
-                        override fun onError(exception: ImageCaptureException) {
-                            status = "Capture failed: ${exception.message}"
-                            busy = false
-                        }
-                    })
+                                    override fun onError(exception: ImageCaptureException) { status = "Capture failed"; busy = false }
+                                })
+                        }, contentAlignment = Alignment.Center) {
+                        if (busy) CircularProgressIndicator(Modifier.size(30.dp), color = Color(0xFF08090B), strokeWidth = 3.dp)
+                        else Box(Modifier.size(54.dp).clip(CircleShape).background(Color.White))
+                    }
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Text("AI", color = Color(0xFFC7F36B), fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    }
                 }
-            ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(if (busy) "PROCESSING…" else if (modelPath == null) "AI MODEL REQUIRED" else "CAPTURE + AI ENHANCE")
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(status, style = MaterialTheme.typography.bodySmall, color = Color(0xFFB6F36B))
-            if (modelPath == null && status.startsWith("Model download failed")) {
-                TextButton(onClick = { downloadAttempt++ }) { Text("RETRY MODEL DOWNLOAD") }
+                Spacer(Modifier.height(12.dp))
+                Text(status, color = Color.White.copy(alpha = .8f), fontSize = 10.sp, maxLines = 1)
+                if (modelPath == null && status.startsWith("Model download failed")) {
+                    TextButton(onClick = { downloadAttempt++ }) { Text("RETRY MODEL DOWNLOAD", color = Color(0xFFC7F36B)) }
+                }
             }
         }
     }
-}
-
-private fun saveToGallery(bitmap: android.graphics.Bitmap): Uri? {
-    val resolver = AppContextHolder.context?.contentResolver ?: return null
-    val values = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, "Cod3uchiha_${System.currentTimeMillis()}.jpg")
-        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Cod3uchiha AI Camera")
-    }
-    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
-    resolver.openOutputStream(uri)?.use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 96, it) }
-    return uri
-}
-
-private object AppContextHolder {
-    var context: android.content.Context? = null
-}
