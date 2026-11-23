@@ -156,12 +156,12 @@ private fun CameraScreen() {
                     Text("CAMERA", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TopControl { gridEnabled = !gridEnabled; }
+                    TopControl(Icons.Default.GridOn, "Grid", gridEnabled) { gridEnabled = !gridEnabled }
                     TopControl {
                         flashEnabled = !flashEnabled
                         imageCapture?.flashMode = if (flashEnabled) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
                     }
-                    TopControl { status = "AI enhancement runs automatically after capture" }
+                    TopControl(Icons.Default.HdrOn, "AI enhancement", modelPath != null) { status = "AI enhancement runs automatically after capture" }
                 }
             }
             Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 66.dp)
